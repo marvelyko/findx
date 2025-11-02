@@ -1,0 +1,204 @@
+@page
+@model FindX.Pages.IndexModel
+@{
+    ViewData["Title"] = "Send Your Message";
+}
+
+<div class="main-container">
+    <div class="card-modern fade-in">
+        <div class="card-header-modern">
+            <h1>Send Your Message</h1>
+            <p class="text-muted mb-0" style="margin-top: 0.5rem; font-size: 0.9375rem;">Share your thoughts with others</p>
+        </div>
+        <div class="card-body-modern">
+            <form id="messageForm" enctype="multipart/form-data">
+                <!-- Photo Upload -->
+                <div class="mb-4">
+                    <label for="photo" class="form-label">Photo</label>
+                    <div class="photo-upload-area" id="photoUploadArea">
+                        <input type="file" class="d-none" id="photo" name="photo" accept="image/*" required>
+                        <div id="photoUploadContent">
+                            <i class="bi bi-cloud-upload" style="font-size: 2.5rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></i>
+                            <p class="mb-2" style="color: var(--text-secondary); font-size: 0.9375rem;">
+                                <strong>Click to upload</strong> or drag and drop
+                            </p>
+                            <p class="mb-0" style="color: var(--text-secondary); font-size: 0.8125rem;">PNG, JPG, GIF up to 10MB</p>
+                        </div>
+                        <img id="photoPreview" class="photo-preview" style="display: none;" alt="Preview">
+                    </div>
+                </div>
+
+                <!-- Name Input -->
+                <div class="mb-4">
+                    <label for="name" class="form-label">Your Name</label>
+                    <input type="text" class="form-control" id="name" name="name" placeholder="Enter your name" required>
+                </div>
+
+                <!-- Message Input -->
+                <div class="mb-4">
+                    <label for="message" class="form-label">Message</label>
+                    <textarea class="form-control" id="message" name="message" rows="5" placeholder="Write your message here..." required></textarea>
+                </div>
+
+                <!-- Location Permission -->
+                <div class="mb-4">
+                    <label class="form-label">Location</label>
+                    <button type="button" class="btn btn-outline-primary w-100" id="locationBtn">
+                        <i class="bi bi-geo-alt"></i> Grant Location Permission
+                    </button>
+                    <div class="location-status" id="locationStatus">
+                        <i class="bi bi-info-circle"></i> Location permission is required to send messages
+                    </div>
+                    <input type="hidden" id="latitude" name="latitude">
+                    <input type="hidden" id="longitude" name="longitude">
+                </div>
+
+                <!-- Submit Button -->
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg" id="sendBtn">
+                        <i class="bi bi-send"></i> Send Message
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+            sessionId = crypto.randomUUID();
+            localStorage.setItem('sessionId', sessionId);
+        }
+
+        const photoUploadArea = document.getElementById('photoUploadArea');
+        const photoInput = document.getElementById('photo');
+        const photoPreview = document.getElementById('photoPreview');
+        const photoUploadContent = document.getElementById('photoUploadContent');
+
+        // Photo upload click
+        photoUploadArea.addEventListener('click', () => photoInput.click());
+
+        // Photo preview
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    photoPreview.src = e.target.result;
+                    photoPreview.style.display = 'block';
+                    photoUploadContent.style.display = 'none';
+                    photoUploadArea.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Drag and drop
+        photoUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            photoUploadArea.style.borderColor = 'var(--primary)';
+        });
+
+        photoUploadArea.addEventListener('dragleave', () => {
+            photoUploadArea.style.borderColor = 'var(--border-color)';
+        });
+
+        photoUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            photoUploadArea.style.borderColor = 'var(--border-color)';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                photoInput.files = e.dataTransfer.files;
+                photoInput.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Location permission
+        let locationGranted = false;
+        const locationBtn = document.getElementById('locationBtn');
+        const locationStatus = document.getElementById('locationStatus');
+
+        locationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                locationBtn.disabled = true;
+                locationBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Getting location...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        document.getElementById('latitude').value = position.coords.latitude;
+                        document.getElementById('longitude').value = position.coords.longitude;
+                        
+                        locationStatus.innerHTML = `<i class="bi bi-check-circle-fill"></i> Location granted: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
+                        locationStatus.classList.add('granted');
+                        
+                        locationBtn.innerHTML = '<i class="bi bi-check-circle"></i> Location Granted';
+                        locationBtn.classList.remove('btn-outline-primary');
+                        locationBtn.classList.add('btn-success');
+                        locationBtn.disabled = false;
+                        locationGranted = true;
+                    },
+                    function(error) {
+                        locationStatus.innerHTML = '<i class="bi bi-x-circle"></i> Failed to get location. Please allow location access and try again.';
+                        locationStatus.classList.remove('granted');
+                        locationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Grant Location Permission';
+                        locationBtn.disabled = false;
+                        alert('Failed to get location. Please allow location access.');
+                    }
+                );
+            } else {
+                alert('Geolocation is not supported by your browser.');
+            }
+        });
+
+        // Form submission
+        document.getElementById('messageForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            if (!locationGranted) {
+                alert('Please grant location permission before sending.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('Name', document.getElementById('name').value);
+            formData.append('MessageText', document.getElementById('message').value);
+            formData.append('Latitude', document.getElementById('latitude').value);
+            formData.append('Longitude', document.getElementById('longitude').value);
+            formData.append('SessionId', sessionId);
+
+            const photoFile = document.getElementById('photo').files[0];
+            if (photoFile) {
+                formData.append('Photo', photoFile);
+            }
+
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
+
+            try {
+                const response = await fetch('/api/messages/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('currentMessageId', result.messageId);
+                    window.location.href = '/ViewMessages';
+                } else {
+                    alert('Failed to send message. Please try again.');
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<i class="bi bi-send"></i> Send Message';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-send"></i> Send Message';
+            }
+        });
+    </script>
+}
